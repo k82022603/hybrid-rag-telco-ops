@@ -71,6 +71,44 @@
 * **역할:** 16GB RAM 환경에서 발생하는 메모리 부족(OOM) 문제를 해결합니다.
 * **기능:** LangGraph의 `Checkpointer`를 활용하여 추론 중간 상태를 로컬 파일시스템(SQLite 등)에 기록하여 메모리 점유를 최소화합니다.
 
+---
+
+## 🧠 심층 추론 전략 (Deep Reasoning Strategy)
+
+### **1. Claude 4.5 전용 'Intent & Weighting' 프롬프트**
+
+Planner 노드는 질문의 성격에 따라 데이터 소스별 가중치를 동적으로 할당합니다.
+
+```xml
+<system_instruction>
+당신은 통신사 장애 대응 시스템의 오케스트레이터입니다. 질문을 분석하여 3가지 소스에 대한 가중치(합 1.0)를 결정하세요.
+1. PostgreSQL(BSS): 고객 팩트 체크 / 2. Neo4j(OSS): 망 토폴로지 추론 / 3. Elasticsearch(Knowledge): 조치 매뉴얼
+</system_instruction>
+<intent_rules>
+- 특정 고객/전화번호 포함 시 -> PG 가중치 UP
+- '원인/영향도' 분석 요청 시 -> Neo4j 가중치 UP
+- '조치 방법/매뉴얼' 요청 시 -> ES 가중치 UP
+</intent_rules>
+
+```
+
+* **시나리오 A (VIP 장애 원인):** `{"pg": 0.4, "neo4j": 0.5, "es": 0.1}`
+* **시나리오 B (표준 조치 절차):** `{"pg": 0.1, "neo4j": 0.3, "es": 0.6}`
+
+### **2. AT&T식 객체 중심 온톨로지 및 Slim Graph**
+
+AT&T와 팔란티어 AIP의 철학을 반영하여 **"Noun(Graph) vs Adjective(SQL)"** 원칙으로 설계합니다.
+
+* **Neo4j (Slim Graph):** 추론의 길목이 되는 핵심 관계(Status, Hierarchy)만 노드로 구성하여 메모리 효율과 추론 속도 극대화.
+* **PostgreSQL (Rich Metadata):** 시리얼 번호, 제조사 상세 스펙 등 단순 정보는 **Lazy Loading** 방식으로 필요할 때만 SQL 툴로 호출.
+* **ID-Mapping Ledger:** 모든 DB가 공통된 `Asset_ID`를 공유하여 즉각적인 Cross-DB Join 방지 및 애플리케이션 레벨 결합.
+
+### **3. 지능형 네비게이터로서의 Elasticsearch**
+
+ES는 단순 부가 정보 저장소가 아닌 전체 시스템의 **Entry Point** 역할을 수행합니다.
+
+* **BM25:** 오타가 섞인 장비 일련번호나 모델명을 정확히 포착해 그래프 탐색의 시작점(Node)을 제공.
+* **Semantic Search:** 비정형 상담 로그 및 십수 년치 기술 매뉴얼에서 경험적 지식(Solution) 추출.
 
 
 ---
@@ -131,6 +169,7 @@
 * **ID-Mapping Ledger:** 모든 DB가 공통된 `Asset_ID`를 공유하여, SQL 결과를 기반으로 즉시 Graph/Vector 검색으로 전환할 수 있는 인덱싱 구조를 확립합니다.
 * **Event-Driven Update:** Postgres 메타데이터 변경 시, Neo4j 및 ES에 상태값이 반영되도록 경량 동기화 파이프라인을 구축합니다.
 
+
 ### **5. Vector Engine 운영 전략: 하이브리드 검색 고도화**
 
 무료 라이선스의 제약을 기술적으로 극복하고 고성능 검색 품질을 확보하기 위한 전략입니다.
@@ -179,7 +218,7 @@
 ---
 ## 별첨
 
-**hybrid-rag-telco-ops: docker-compose.yml**
+**hybrid-rag-telco-ops: docker-compose.yml** (샘플)
 
 ```yaml
 version: '3.8'

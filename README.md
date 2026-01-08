@@ -36,38 +36,36 @@
 
 ### **1. Core Intelligence Layer: 지능형 제어 계층**
 
-* **Orchestrator (LangGraph: State Machine)**
+#### **Orchestrator (LangGraph: State Machine)**
 * **역할:** 에이전트의 사고 흐름을 DAG(Directed Acyclic Graph) 형태의 상태 머신으로 관리합니다.
 * **기능:** 추론의 각 단계에서 상태(State)를 보존하며, 조건부 분기(Conditional Edge)를 통해 특정 조건 충족 시 이전 단계로 회귀하거나 다음 단계로 전이합니다.
 * **상태 정의:** 태스크 리스트, 중간 결과(Context), 쿼리 실패 이력, 응답 후보 등을 관리합니다.
 
 
-* **Brain (Claude 4.5: Planning & Verification)**
+#### **Brain (Claude 4.5: Planning & Verification)**
 * **역할:** 고차원 추론을 통해 복잡한 과업을 하위 목표(Sub-goals)로 분해하는 전략가 역할을 수행합니다.
 * **Planning Tool:** 질문 분석 후 필요한 정보의 종류(BSS/OSS/KB)와 접근 순서를 결정합니다.
 * **Verification:** 실행 결과가 답변하기 충분한지, 할루시네이션은 없는지 논리적으로 검증합니다.
 
 
-* **Library (LangChain: Semantic Interfacing)**
+#### **Library (LangChain: Semantic Interfacing)**
 * **역할:** 이기종 데이터베이스와 LLM 사이의 통역사 역할을 수행합니다.
 * **인터페이스 엔진:** PostgreSQL(SQL), Neo4j(Cypher), Elasticsearch(Vector Query)를 위한 정형화된 프로토콜을 제공합니다.
 
-
-
 ### **2. Deep Agent 핵심 메커니즘: 자율 운영 엔진**
 
-* **Hybrid Result Fusion (애플리케이션 계층 검색 융합)**
+#### **Hybrid Result Fusion (애플리케이션 계층 검색 융합)**
 * **역할:** Elasticsearch 무료 라이선스 제약을 극복하고 BGE-M3 하이브리드 검색 성능 극대화.
 * **기능:** Semantic(의미)과 BM25(키워드) 결과를 독립적으로 수집 후, Python 기반 RRF(Reciprocal Rank Fusion) 함수로 재정렬.
 * **효과:** 고가의 Enterprise 기능 없이도 최상위 수준의 검색 품질 구현.
 
 
-* **Self-Correction Loop (자율 교정 루프)**
+#### **Self-Correction Loop (자율 교정 루프)**
 * **Query Self-Healing:** 생성한 쿼리(SQL/Cypher) 실행 오류 시, 에러 메시지를 분석하여 문법을 스스로 수정하고 재실행합니다.
 * **Recursive Retrieval:** 검색 결과의 유사도가 낮을 경우 검색어 확장(Query Expansion)을 통해 만족스러운 결과가 나올 때까지 반복 탐색합니다.
 
 
-* **Filesystem Context Management (오프-메모리 컨텍스트 관리)**
+#### **Filesystem Context Management (오프-메모리 컨텍스트 관리)**
 * **역할:** 16GB RAM 환경에서 발생하는 메모리 부족(OOM) 문제를 해결합니다.
 * **기능:** LangGraph의 `Checkpointer`를 활용하여 추론 중간 상태를 로컬 파일시스템(SQLite 등)에 기록하여 메모리 점유를 최소화합니다.
 

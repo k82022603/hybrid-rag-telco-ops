@@ -293,3 +293,125 @@ networks:
     name: telco-network
 
 ```
+
+---
+## [별첨] 팔란티어식 하이브리드 Graph RAG 전체 아키텍처
+
+```mermaid
+graph TD
+    %% 사용자 입력 레이어
+    User((사용자 질문)) --> LLM_Plan[<b>1. Claude 4.5: Intent & Weighting</b><br/>XML 기반 의도 분류 및<br/>DB별 가중치 결정]
+
+    %% 데이터 탐색 및 실행 레이어 (LangGraph Nodes)
+    subgraph "LangGraph Agentic Workflow"
+        LLM_Plan --> SQL_Gen[<b>2. SQL Generator</b><br/>PostgreSQL 쿼리 생성]
+        SQL_Gen --> SQL_Exec[<b>3. PostgreSQL Exec</b><br/>고객/장비 마스터 정보 확보]
+        
+        SQL_Exec --> Cypher_Gen[<b>4. Cypher Generator</b><br/>Neo4j 쿼리 생성<br/><i>*BSS 결과 및 Slim Graph 기반</i>]
+        
+        Cypher_Gen --> Cypher_Exec[<b>5. Neo4j Exec</b><br/>망 토폴로지 및 영향도 추론]
+        
+        %% Self-Correction & Interactive 루프
+        Cypher_Exec -- "Confidence Low" --> User_Ask{<b>Interactive Prompt</b>}
+        User_Ask -- "추가 정보 제공" --> LLM_Plan
+        
+        Cypher_Exec -- "데이터 확보" --> ES_Search[<b>6. Hybrid Search</b><br/>Elasticsearch: BM25 + Vector]
+        
+        %% RRF 추가
+        ES_Search --> RRF_Fusion[<b>7. Application-level RRF</b><br/>가중치 기반 검색 결과 융합]
+    end
+
+    %% 데이터 저장소 레이어 (Data Platform)
+    subgraph "Data Platform (Ontology)"
+        SQL_Exec -.-> PG[(PostgreSQL<br/>BSS Fact)]
+        Cypher_Exec -.-> Neo4j[(Neo4j<br/>OSS Topology)]
+        ES_Search -.-> ES[(Elasticsearch<br/>Knowledge Base)]
+    end
+
+    %% 최종 합성 레이어
+    RRF_Fusion --> LLM_Synth[<b>8. Claude 4.5: Synthesis</b><br/>최종 근거 기반 답변 생성]
+    LLM_Synth --> FinalAns((최종 답변 제공))
+
+    %% 스타일링
+    style User fill:#f9f,stroke:#333,stroke-width:2px
+    style PG fill:#336791,color:#fff
+    style Neo4j fill:#008CC1,color:#fff
+    style ES fill:#005571,color:#fff
+    style User_Ask fill:#ff9900,stroke-width:2px
+    style RRF_Fusion fill:#d4edda,stroke-width:2px
+    style FinalAns fill:#ccffcc,stroke:#333
+
+```
+
+---
+
+## [별첨] LangGraph Agentic Workflow
+
+```mermaid
+graph TD
+    %% 시작점
+    Start((<b>START</b>)) --> IntentNode
+
+    subgraph "Reasoning Phase"
+        IntentNode["<b>Node: Intent Analyzer</b><br/>Claude 4.5: 의도 파약 및 가중치 결정<br/>(weights, target_id 추출)"]
+    end
+
+    %% 의도 분석 후 조건부 분기
+    IntentNode --> RouteQuery{<b>Condition: <br/>Routing</b>}
+
+    %% 데이터 소스별 실행 노드
+    subgraph "Retrieval Phase"
+        RouteQuery -- "BSS Fact 필요" --> SQLNode["<b>Node: SQL Generator</b><br/>PostgreSQL: 가입자/자산 정보 조회"]
+        RouteQuery -- "Knowledge 필요" --> ESNode["<b>Node: Hybrid Retriever</b><br/>ES: BM25 + Semantic 검색"]
+        
+        SQLNode --> CypherNode["<b>Node: Graph Reasoner</b><br/>Neo4j: 토폴로지 장애 경로 추론"]
+    end
+
+    %% 자율 교정 및 사용자 피드백 루프
+    subgraph "Verification Phase"
+        CypherNode --> CheckGraph{<b>Data<br/>Sufficient?</b>}
+        CheckGraph -- "Low Confidence" --> FeedbackNode["<b>Node: Interactive Task</b><br/>사용자에게 추가 정보 요청"]
+        FeedbackNode --> IntentNode
+        
+        CheckGraph -- "High Confidence" --> RRFNode["<b>Node: RRF Fusion</b><br/>가중치 기반 검색 결과 융합"]
+        ESNode --> RRFNode
+    end
+    
+    %% 최종 합성 레이어
+    subgraph "Synthesis Phase"
+        RRFNode --> SynthNode["<b>Node: Answer Synthesizer</b><br/>최종 근거 기반 조치 가이드 생성"]
+    end
+    
+    SynthNode --> End((<b>END</b>))
+
+    %% 스타일링
+    style IntentNode fill:#e1f5fe,stroke:#01579b
+    style SQLNode fill:#fff3e0,stroke:#e65100
+    style ESNode fill:#fff3e0,stroke:#e65100
+    style CypherNode fill:#fff3e0,stroke:#e65100
+    style RouteQuery fill:#f3e5f5,stroke:#4a148c
+    style CheckGraph fill:#fce4ec,stroke:#880e4f
+    style RRFNode fill:#e8f5e9,stroke:#1b5e20
+    style FeedbackNode fill:#fff9c4,stroke:#fbc02d
+    style FinalAns fill:#ccffcc,stroke:#333
+```
+
+---
+
+## 📖 별첨: 용어 사전 (Glossary)
+
+통신 도메인 지식(BSS/OSS)과 최신 AI 기술(RAG, Agent)이 결합된 프로젝트인 만큼, 별첨으로 포함하면 협업자나 Claude Code가 맥락을 파악하는 데 큰 도움이 됩니다.
+
+| 구분 | 용어 | 정의 및 본 프로젝트에서의 역할 |
+| --- | --- | --- |
+| **Domain** | **BSS (Business Support System)** | 고객 관리, 요금 청구 등 사업 지원 시스템. 본 프로젝트의 **PostgreSQL**에 해당하며 '가입자 팩트'의 원천입니다. |
+| **Domain** | **OSS (Operations Support System)** | 망 구성, 장비 상태 관제 등 운영 지원 시스템. **Neo4j**의 토폴로지 데이터와 **ES**의 기술 매뉴얼이 이 영역에 속합니다. |
+| **Agent** | **Intent Classification** | 사용자의 질문 목적을 분류하는 것. Claude 4.5가 XML 프롬프트를 통해 DB별 가중치를 결정하는 핵심 단계입니다. |
+| **Agent** | **Self-Healing Query** | 에이전트가 생성한 SQL/Cypher 쿼리가 실패했을 때, 에러 로그를 분석하여 스스로 문법을 수정하고 재실행하는 메커니즘입니다. |
+| **Agent** | **Confidence Threshold** | 추론 결과의 확신도 임계값. 이 값보다 낮으면 독단적으로 답하지 않고 사용자에게 추가 정보를 요청(Interactive Reasoning)합니다. |
+| **Data** | **Slim Ontology** | 추론에 꼭 필요한 핵심 관계(Noun)만 그래프에 담고, 상세 속성(Adjective)은 정형 DB로 분리하여 효율을 높인 설계 방식입니다. |
+| **Data** | **Golden ID (Asset_ID)** | 이기종 DB(PG, Neo4j, ES) 간에 데이터를 매핑하기 위한 유일한 식별자. Cross-DB 추론의 연결고리 역할을 합니다. |
+| **Search** | **BGE-M3** | 다국어 및 Dense/Sparse 검색을 동시에 지원하는 임베딩 모델. 통신 전문 용어의 정밀한 시맨틱 검색을 위해 사용됩니다. |
+| **Search** | **RRF (Reciprocal Rank Fusion)** | 서로 다른 검색 알고리즘(BM25, Vector)의 결과 순위를 수학적으로 결합하여 최종 순위를 산출하는 랭킹 알고리즘입니다. |
+| **Infra** | **ONNX Runtime** | 딥러닝 모델을 CPU 환경에서 최적화하여 실행하는 추론 엔진. GPU 없는 환경에서 임베딩 속도를 비약적으로 향상시킵니다. |
+| **Infra** | **WSL2 (Windows Subsystem for Linux)** | Windows 환경 내에서 리눅스 커널을 구동하는 기술. Docker 및 Claude Code의 안정적인 실행 환경을 제공합니다. |
